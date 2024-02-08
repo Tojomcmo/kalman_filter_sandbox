@@ -30,13 +30,10 @@ class qc_ss_1_tests(unittest.TestCase):
         D_valid = np.array([[0, 0],
                             [0, 0],
                             [0, 0]])
-        
         self.assertEqual((qc_ss_test.A).tolist(), A_valid.tolist())
         self.assertEqual((qc_ss_test.B).tolist(), B_valid.tolist())
         self.assertEqual((qc_ss_test.C).tolist(), C_valid.tolist())
         self.assertEqual((qc_ss_test.D).tolist(), D_valid.tolist())
-
-
 
 if __name__ == '__main__':
     unittest.main()
