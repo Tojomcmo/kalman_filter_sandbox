@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.signal import StateSpace as ss
 
 def dynamics_rk4_zoh(dyn_func, ts, x, u):
     '''
@@ -17,3 +18,7 @@ def dynamics_rk4_zoh(dyn_func, ts, x, u):
     f3 = dyn_func(x + (ts/2)*f2, u)
     f4 = dyn_func(x + ts*f3, u)
     return x + ((ts/6) * (f1 + (f2/2) + (f3/2) + f4))
+
+
+
+
