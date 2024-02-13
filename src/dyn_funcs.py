@@ -3,6 +3,12 @@ from scipy.signal import StateSpace, cont2discrete
 from scipy.linalg import expm
 
 
+def get_ss_dims(ss:StateSpace):
+   x_dim = (ss.A).shape[0]
+   u_dim = (ss.B).shape[1]
+   y_dim = (ss.C).shape[0]
+   return x_dim, u_dim, y_dim
+
 def qc_ss_1(params, isdiscrete = False, ts = 0.0):
    '''
     This function generates the state space model for an active suspension Quarter Car model
@@ -60,11 +66,143 @@ def qc_ss_1(params, isdiscrete = False, ts = 0.0):
       sys = sys.to_discrete(ts)
    return sys
 
-def get_ss_dims(ss:StateSpace):
-   x_dim = (ss.A).shape[0]
-   u_dim = (ss.B).shape[1]
-   y_dim = (ss.C).shape[0]
-   return x_dim, u_dim, y_dim
+def qc_ss_2(params, isdiscrete = False, ts = 0.0):
+   '''
+    This function generates the state space model for an active suspension Quarter Car model
+    with the provided parameter dictionary
+    
+    params - [in]: dictionary with following structure
+       'ms' - sprung mass [kg]
+       'mu' - unsprung mass [kg]
+       'bs' - suspension damping rate [Ns/m]
+       'ks' - suspension spring rate [N/m]
+       'kt' - tire spring rate [N/m]
+    
+    The state space structure corresponds to the following vectors   
+    x: state vector [5x1] 
+       zs      - sprung mass position [m]
+       zs_dot  - sprung mass velocity [m/s]
+       zu      - unsprung mass position [m]
+       zu_dot  - unsprung mass velocity [m/s]
+    u: input vector [2x1]
+       fs      - active suspension force [N]
+       zr      - road profile vertical position [N]
+    y: output vector [3x1]
+       zs_ddot   - sprung mass acceleration [m/s2]  
+       zu_ddot   - unsprung mass acceleration [m/s2]
+       susp_disp - suspension displacement (zs-zu) [m]
+    '''
+   ms = params['ms']
+   mu = params['mu']
+   bs = params['bs']
+   ks = params['ks']
+   kt = params['kt']
+
+   A = np.array([[0, 1, 0, 0],
+                  [-(ks/ms), -(bs/ms), (ks/ms), (bs/ms)],
+                  [0, 0, 0, 1],
+                  [(ks/mu), (bs/mu), -((ks+kt)/mu), -(bs/mu)]])
+    
+   B = np.array([[0, 0],
+                  [(1/ms), 0],
+                  [0, 0],
+                  [-(1/mu), (kt/mu)]])
+    
+   C = np.array([[-(ks/ms), -(bs/ms), (ks/ms), (bs/ms)],
+                  [(ks/mu), (bs/mu), -((ks+kt)/mu), -(bs/mu)],
+                  [1, 0, -1, 0]])
+   
+   D = np.array([[0, 0],
+                  [0,(kt/mu)],
+                  [0, 0]])
+   sys = StateSpace(A, B, C, D)
+   if isdiscrete == True:
+      if ts <= 0.0:
+         raise ValueError(f'ts must be a positive float value, currently: %', ts)
+      sys = sys.to_discrete(ts)
+   return sys
+
+def qc_ss_3(params, isdiscrete = False, ts = 0.0):
+   '''
+    This function generates the state space model for an active suspension Quarter Car model
+    with the provided parameter dictionary
+    
+    params - [in]: dictionary with following structure
+       'ms' - sprung mass [kg]
+       'mu' - unsprung mass [kg]
+       'bs' - suspension damping rate [Ns/m]
+       'ks' - suspension spring rate [N/m]
+       'kt' - tire spring rate [N/m]
+
+    control_sys- [out]: StateSpace structure with control containing canonical structure
+       'A'  - State transition matrix [nxn]
+       'B'  - Control input matrix [nxm]
+       'C'  - Measurement matrix [qxn]
+       'D'  - Direct feedthrough matrix [qxm]
+
+    disturb_sys- [out]: StateSpace structure with disturbance containing canonical structure
+       'A'  - State transition matrix [nxn]
+       'Bd' - Disturbance input matrix [nxm]
+       'C'  - Measurement matrix [qxn]
+       'Dd' - Disturbance Direct feedthrough matrix [qxm]
+    
+    The state space structure corresponds to the following vectors   
+    x: state vector [5x1] 
+       zs      - sprung mass position [m]
+       zs_dot  - sprung mass velocity [m/s]
+       zu      - unsprung mass position [m]
+       zu_dot  - unsprung mass velocity [m/s]
+    u: control input vector [1x1]
+       fs      - active suspension force [N]
+    ud: disturbance input vector [1x1]
+       zr      - road profile vertical position [N]
+    y: output vector [3x1]
+       zs_ddot   - sprung mass acceleration [m/s2]  
+       zu_ddot   - unsprung mass acceleration [m/s2]
+       susp_disp - suspension displacement (zs-zu) [m]
+    '''
+   ms = params['ms']
+   mu = params['mu']
+   bs = params['bs']
+   ks = params['ks']
+   kt = params['kt']
+
+   A = np.array([[0, 1, 0, 0],
+                  [-(ks/ms), -(bs/ms), (ks/ms), (bs/ms)],
+                  [0, 0, 0, 1],
+                  [(ks/mu), (bs/mu), -((ks+kt)/mu), -(bs/mu)]])
+    
+   B = np.array([[0],
+                  [(1/ms)],
+                  [0],
+                  [-(1/mu)]])
+    
+   C = np.array([[-(ks/ms), -(bs/ms), (ks/ms), (bs/ms)],
+                  [(ks/mu), (bs/mu), -((ks+kt)/mu), -(bs/mu)],
+                  [1, 0, -1, 0]])
+   
+   D = np.array([[0],
+                 [0],
+                 [0]])
+   
+   Bd = np.array([[0],
+                  [0],
+                  [0],
+                 [(kt/mu)]])
+   
+   Dd = np.array([[0],
+                 [(kt/mu)],
+                 [0]])  
+    
+   control_sys = StateSpace(A, B, C, D)
+   disturb_sys = StateSpace(A, Bd, C, Dd)   
+   if isdiscrete == True:
+      if ts <= 0.0:
+         raise ValueError(f'ts must be a positive float value, currently: %', ts)
+      control_sys = control_sys.to_discrete(ts)
+      disturb_sys = disturb_sys.to_discrete(ts)
+   return control_sys, disturb_sys
+
 
 def c2d_zoh_ss(ss_cont:StateSpace, time_step):
    '''
