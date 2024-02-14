@@ -1,6 +1,7 @@
 import numpy as np
 from filterpy.kalman import KalmanFilter
 from scipy.signal import dbode, dstep
+from control import dlqr
 import src.dyn_funcs as dyn
 import src.road_profile_funcs as road
 import matplotlib.pyplot as plt
@@ -19,11 +20,11 @@ if __name__ == "__main__":
     road_profile = road.CombinedRoadProfile()
     road_profile.add_new_feature(road.SingleRoadFeature(1.0, 0.05, 1.0, profile='halfsine'))
     road_profile.add_new_feature(road.SingleRoadFeature(4.0, -0.05, 1.0, profile='halfsine'))
-    road_profile.add_new_feature(road.SingleRoadFeature(7.0, 0.05, 2.0, profile='rectangle'))  
+    road_profile.add_new_feature(road.SingleRoadFeature(7.0, 0.025, 0.1, profile='rectangle'))  
 
-    x_vel         = 3.0
-    test_distance = 12.0
-    sample_rate   = 200
+    x_vel         = 5.0
+    test_distance = 9.0
+    sample_rate   = 500
     x_init_vec    = np.array([[0],[0],[0],[0]])
     u_vec         = np.array([[0]])
 
@@ -53,6 +54,14 @@ if __name__ == "__main__":
     kf.R = np.array([[1, 0, 0],
                      [0, 1, 0],
                      [0, 0, 1]])*1.0
+    
+    # Create LQR controller instance
+    Q_lqr = np.array([[1,0,0,0],
+                      [0,5000,0,0],
+                      [0,0,0.01,0],
+                      [0,0,0,1000]])
+    R_lqr = np.array([[1]])*0.0001
+    k_lqr,_,_ = dlqr(qc_control_model.A, qc_control_model.B, Q_lqr, R_lqr)
 
     # prep log vectors
     x_gt_log         = np.zeros((len(sample_x_vec),x_dim,1))
@@ -65,8 +74,7 @@ if __name__ == "__main__":
     #initialize simulation loop
     x_gt_log[0]    = x_init_vec
     x_est_log[0]   = x_init_vec
-    u_est          = np.array([[0.0]])
-    u_vec_log[0]   = u_est 
+    u_vec_log[0]   = np.array([[0.0]])
     ud_vec_log[0]  = road_profile.get_z_pos(sample_x_vec[0]) 
 
     for idx, x_pos in enumerate(sample_x_vec):
@@ -80,15 +88,15 @@ if __name__ == "__main__":
         process_noise_array[2] = 0.0                                     
         # propagate state and grab new control/disturbance information at new state for direct feedthrough measurement 
         x_gt_log[idx+1]   = (qc_control_model.A @ x_gt_log[idx]) + (qc_control_model.B @ u_vec_log[idx]) + (qc_disturb_model.B @ ud_vec_log[idx]) +  process_noise_array                    
-        u_vec_log[idx+1]  = np.array([[0.0]])  
         ud_vec_log[idx+1] = road_profile.get_z_pos(sample_x_vec[idx+1]) 
         # create measurement noise vector for measurement contamination, take reading at state kp1   
         measure_noise_array = (np.array([np.random.normal(0.0, 0.1, 3)])).transpose()
         measure_noise_array[2] *= 0.1        
-        z_log[idx+1] = (qc_control_model.C @ x_gt_log[idx+1]) + (qc_control_model.D @ u_vec_log[idx+1]) + (qc_disturb_model.D @ ud_vec_log[idx+1]) + measure_noise_array
+        z_log[idx+1] = (qc_control_model.C @ x_gt_log[idx+1]) + (qc_control_model.D @ u_vec_log[idx]) + (qc_disturb_model.D @ ud_vec_log[idx+1]) + measure_noise_array
         #calculate new kalman estimate of state
         kf.update(z_log[idx+1])
         x_est_log[idx+1] = kf.x
+        u_vec_log[idx+1]  = -k_lqr @ x_est_log[idx+1]
         # z_est_log[idx+1] = qc_control_model.C @ kf.x + qc_control_model.D @ u_vec_log[idx]
 
 
@@ -99,7 +107,7 @@ if __name__ == "__main__":
     plt.plot(sample_x_vec, x_est_log[:,0], marker='D',  label='sprung mass z est')  # 'o' creates circular markers at each data point
     plt.plot(sample_x_vec, x_gt_log[:,2], marker='+',   label='unsprung mass z')  # 'o' creates circular markers at each data point       
     plt.plot(sample_x_vec, x_est_log[:,2], marker='x',  label='unsprung mass z est')  # 'o' creates circular markers at each data point  
-    plt.title('GT vertical pos vs x pos')
+    plt.title('Verical positions vs x position')
     plt.xlabel('position [m]')
     plt.ylabel('z [m]')
     plt.legend()    
@@ -110,7 +118,7 @@ if __name__ == "__main__":
     plt.plot(sample_x_vec, x_est_log[:,1], marker='D', label='sprung mass z vel est')  # 'o' creates circular markers at each data point
     plt.plot(sample_x_vec, x_gt_log[:,3], marker='+',  label='unsprung mass z vel')  # 'o' creates circular markers at each data point       
     plt.plot(sample_x_vec, x_est_log[:,3], marker='x', label='unsprung mass z vel est')  # 'o' creates circular markers at each data point  
-    plt.title('GT vertical vel vs x pos')
+    plt.title('Vertical velocities vs x position')
     plt.xlabel('position [m]')
     plt.ylabel('velocity [m/s]')
     plt.legend()    
@@ -119,7 +127,7 @@ if __name__ == "__main__":
     plt.subplot(3,2,3)
     plt.plot(sample_x_vec, z_log[:,0], marker='D',     label='sprung mass acc')  # 'o' creates circular markers at each data point
     plt.plot(sample_x_vec, z_prior_pred_log[:,0], marker='x', label='sprung mass acc est')  # 'o' creates circular markers at each data point       
-    plt.title('Sprung GT Acc vs Acc estimate')
+    plt.title('Sprung Accekeration: GT vs estimate')
     plt.xlabel('position')
     plt.ylabel('zddot [m/s2]')
     plt.legend()
@@ -128,7 +136,7 @@ if __name__ == "__main__":
     plt.subplot(3,2,4)
     plt.plot(sample_x_vec, z_log[:,1], marker='D',     label='unsprung mass acc')  # 'o' creates circular markers at each data point
     plt.plot(sample_x_vec, z_prior_pred_log[:,1], marker='x', label='unsprung mass acc est')  # 'o' creates circular markers at each data point       
-    plt.title('Unsprung GT Acc vs Acc estimate')
+    plt.title('Unsprung Acceleration: GT vs estimate')
     plt.xlabel('position')
     plt.ylabel('zddot [m/s2]')
     plt.legend()
@@ -137,9 +145,17 @@ if __name__ == "__main__":
     plt.subplot(3,2,5)
     plt.plot(sample_x_vec, z_log[:,2], marker='D',     label='susp pot pos')  # 'o' creates circular markers at each data point
     plt.plot(sample_x_vec, z_prior_pred_log[:,2], marker='x', label='susp pot pos est')  # 'o' creates circular markers at each data point       
-    plt.title('GT susp disp vs susp disp estimate')
+    plt.title('Suspension displacement: GT vs estimate')
     plt.xlabel('position')
     plt.ylabel('displacement [m]')
+    plt.legend()   
+    plt.grid(True)
+
+    plt.subplot(3,2,6)
+    plt.plot(sample_x_vec, u_vec_log[:,0], marker='D',     label='active susp force')  # 'o' creates circular markers at each data point   
+    plt.title('Active suspension force vs position')
+    plt.xlabel('position')
+    plt.ylabel('Force [N]')
     plt.legend()   
     plt.grid(True)
 

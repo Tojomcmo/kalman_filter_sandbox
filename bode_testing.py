@@ -16,7 +16,7 @@ if __name__ == "__main__":
             }
    
     dt = 1/500
-    output_select = 2
+    output_select = 0
     output_select_list = ['sprung acceleration', 
                           'unsprung acceleration',
                           'suspension displacement']
