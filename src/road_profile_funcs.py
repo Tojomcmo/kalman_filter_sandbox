@@ -6,8 +6,6 @@ class SingleRoadFeature:
         self.height = height
         self.width = width
         self.profile = profile
-
-
         self.x_end = x_start + width
 
     def get_z_pos(self, x_pos):
