@@ -100,7 +100,7 @@ if __name__ == "__main__":
         # z_est_log[idx+1] = qc_control_model.C @ kf.x + qc_control_model.D @ u_vec_log[idx]
 
 
-    plt.figure(figsize=[20,12])
+    plt.figure(figsize=[18,10])
     plt.subplot(3,2,1)  
     plt.plot(sample_x_vec, ud_vec_log[:,0], marker='.', label='road z profile')  # 'o' creates circular markers at each data point 
     plt.plot(sample_x_vec, x_gt_log[:,0], marker='o',   label='sprung mass z')  # 'o' creates circular markers at each data point
